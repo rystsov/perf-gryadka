@@ -5,8 +5,8 @@ set -e
 mkdir -p deployment/$1
 node src/redis-conf.js $1 $(pwd)/deployment/$1
 
-port=$(cat etc/settings.json | jq ".acceptors.$1.storage.port")
-host=$(cat etc/settings.json | jq ".acceptors.$1.storage.host")
+port=$(cat etc/settings.json | jq -r ".acceptors.$1.storage.port")
+host=$(cat etc/settings.json | jq -r ".acceptors.$1.storage.host")
 echo $port
 echo $(cat node_modules/gryadka/src/lua/accept.lua)
 
