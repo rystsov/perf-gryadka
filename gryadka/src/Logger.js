@@ -23,16 +23,12 @@ class Logger {
         this.file = fs.openSync(this.path, "w");
     }
     async flush(isFinal = false) {
-        if (isFinal) {
+        if (isFinal || this.records.length > 400) {
             const records = this.records;
             this.records = [];
             let content = "";
             for (var i=0;i<records.length;i++) {
                 content += (records[i] + "\n");
-                if (i > 0 && i%100==0) {
-                    await write(this.file, content);
-                    content = "";
-                }
             }
             if (content != "") {
                 await write(this.file, content);
