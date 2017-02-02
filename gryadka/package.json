@@ -1,0 +1,16 @@
+{
+  "name": "perf-gryadka",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "mustache": "2.3.0",
+    "bluebird": "3.4.5",
+    "gryadka": "1.61.8"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT"
+}
