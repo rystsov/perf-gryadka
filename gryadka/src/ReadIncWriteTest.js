@@ -1,12 +1,35 @@
 class ReadIncWriteTest {
-    constructor(services, logger, repeats) {
+    constructor(services, duration_us) {
         this.services = services;
-        this.logger = logger;
-        this.repeats = repeats;
+        this.duration_us = duration_us;
+        this.stat = {
+            threads: services.length,
+            requests: 0,
+            latency: {
+                min_us: null,
+                max_us: null,
+                sum_us: 0
+            },
+            started: 0,
+            ended: 0,
+            oks: 0,
+            fails: 0,
+            conflicts: 0
+        };
+    }
+    dump() {
+        console.info("Latency");
+        console.info("  Avg (us): " + (this.stat.latency.sum_us / this.stat.requests));
+        console.info("  Min (us): " + this.stat.latency.min_us);
+        console.info("  Max (us): " + this.stat.latency.max_us);
+        console.info("Throughput (rps): " + (1000000 * this.stat.requests / (this.stat.ended - this.stat.started)));
+        console.info("Oks: " + this.stat.oks);
+        console.info("Fails: " + this.stat.fails);
+        console.info("Conflicts: " + this.stat.conflicts);
+        console.info("Threads: " + this.stat.threads);
     }
     async run() {
-        this.logger.start();
-        const opid = this.logger.op("test", "boundary", "*");
+        this.stat.started = time_us();
         try {
             var threads = [];
             for (const service of this.services) {
@@ -16,56 +39,73 @@ class ReadIncWriteTest {
             for (const thread of threads) {
                 await thread;
             }
-            this.logger.end(opid, "ok");
+            this.stat.ended = time_us();
         } catch (e) {
+            this.stat.ended = time_us();
             console.info("WTF: ");
             console.info(e);
-            this.logger.end(opid, "error");
-            await this.logger.stop();
             throw e;
         }
-        await this.logger.stop();
+    }
+    async measure(action) {
+        let result = null;
+        let error = null;
+        const startedAt = time_us();
+        this.stat.requests++;
+        try {
+            result = await action();
+            this.stat.oks++;
+        } catch(e) {
+            error = { error: e };
+            this.stat.fails++;
+        }
+        const latency = time_us() - startedAt;
+        this.stat.latency.sum_us += latency;
+        if (this.stat.latency.min_us == null || latency < this.stat.latency.min_us) {
+            this.stat.latency.min_us = latency;
+        }
+        if (this.stat.latency.max_us == null || latency > this.stat.latency.max_us) {
+            this.stat.latency.max_us = latency;
+        }
+        if (error) {
+            throw error.e;
+        } else {
+            return result;
+        }
     }
     async startClientThread(service, key) {
         service.init();
-        for (var i=0;i<this.repeats;i++) {
-            let cycleId = -1;
-            let opId = -1;
+        while (time_us() - this.stat.started < this.duration_us) {
             try {
                 while (true) {
-                    await this.logger.flush();
-                    cycleId = this.logger.op("cycle", service.id, key);
-                    opId = this.logger.op("read", service.id, key);
-                    const read = await service.read(key);
-                    this.logger.end(opId, "ok");
-                    opId = this.logger.op("write", service.id, key);
-                    
+                    const read = await this.measure(() => service.read(key));
                     let written = null;
                     if (read == null) {
-                        written = await service.create(key, "0");
+                        written = await this.measure(() => service.create(key, "0"));
                     } else {
-                        written = await service.write(key, read.ver, "" + (parseInt(read.val) + 1));
+                        written = await this.measure(() => service.write(key, read.ver, "" + (parseInt(read.val) + 1)));
                     }
-                    
                     if (written.isConflict) {
-                        this.logger.end(cycleId, "conflict");
-                        this.logger.end(opId, "conflict");
+                        this.stat.oks--;
+                        this.stat.conflicts++;
                         continue;
                     }
                     if (!written.isOk) {
+                        this.stat.oks--;
+                        this.stat.fails++;
                         throw new Error();
                     }
-                    this.logger.end(opId, "ok");
-                    this.logger.end(cycleId, "ok");
                     break;
                 }
-            } catch (e) {
-                this.logger.end(cycleId, "error");
-                this.logger.end(opId, "error");
-            }
+            } catch (e) { }
         }
         service.stop();
     }
 }
 
 exports.ReadIncWriteTest = ReadIncWriteTest;
+
+function time_us() {
+    const [s, ns] = process.hrtime();
+    return (s*1e9 + ns) / 1000;
+}

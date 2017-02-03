@@ -2,7 +2,7 @@
     "acceptors": { 
         "a1": { 
             "storage": {
-                "host": "10.0.0.4", 
+                "host": "127.0.0.1", 
                 "port": 6379
             }, 
             "accept": "e043ab55a3cdac18d24b3d28e2b456bfc44471ac",
@@ -30,7 +30,7 @@
     },
     "proposer": {
         "id": 0,
-        "acceptors": ["a1", "a2", "a3"],
-        "quorum": { "read": 2, "write": 2 }
+        "acceptors": ["a1"],
+        "quorum": { "read": 1, "write": 1 }
     }
 }
