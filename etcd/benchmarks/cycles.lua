@@ -36,7 +36,7 @@ end
 
 function request()
     if state == 0 then
-        local url = "http://10.0.0.5:2379/v2/keys/" .. key
+        local url = "http://10.0.0.5:2379/v2/keys/" .. key .. "?quorum=true"
         return wrk.format("GET", url, {}, nil)
     elseif state == 1 then
         local url     = "http://10.0.0.5:2379/v2/keys/" .. key .. "?prevExist=false"
