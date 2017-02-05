@@ -2,4 +2,4 @@
 
 set -e
 
-node-nightly --harmony src/benchmark.js $@
+node-nightly --harmony src/benchmark.js -c 8 -d 10m
