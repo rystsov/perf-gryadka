@@ -1,7 +1,10 @@
+const Queue = require('avkrash-queue');
+
 class ReadIncWriteTest {
     constructor(services, duration_us) {
         this.services = services;
         this.duration_us = duration_us;
+        this.isActive = false;
         this.stat = {
             threads: services.length,
             requests: 0,
@@ -14,7 +17,9 @@ class ReadIncWriteTest {
             ended: 0,
             oks: 0,
             fails: 0,
-            conflicts: 0
+            conflicts: 0,
+            cycles: new Queue(),
+            done:0
         };
     }
     dump() {
@@ -30,8 +35,10 @@ class ReadIncWriteTest {
     }
     async run() {
         this.stat.started = time_us();
+        this.isActive = true;
         try {
             var threads = [];
+            threads.push(this.agg());
             for (const service of this.services) {
                 const key = "key" + service.id;
                 threads.push(this.startClientThread(service, key));
@@ -45,6 +52,22 @@ class ReadIncWriteTest {
             console.info("WTF: ");
             console.info(e);
             throw e;
+        }
+    }
+    async agg() {
+        while (this.isActive) {
+            await new Promise((resolve, reject) => {
+                setTimeout(() => resolve(true), 1000);
+            });
+            while (!this.stat.cycles.isEmpty()) {
+                if (time_us() - this.stat.cycles.peek().ts > 1000 * 1000) {
+                    this.stat.cycles.dequeue();
+                    this.stat.done-=1;
+                } else {
+                    break;
+                }
+            }
+            console.info("" + Math.floor(time_us() / (1000 * 1000)) + " " + this.stat.done);
         }
     }
     async measure(action) {
@@ -75,9 +98,10 @@ class ReadIncWriteTest {
     }
     async startClientThread(service, key) {
         service.init();
-        while (time_us() - this.stat.started < this.duration_us) {
+        while (this.isActive) {
             try {
                 while (true) {
+                    this.isActive = time_us() - this.stat.started < this.duration_us;
                     const read = await this.measure(() => service.read(key));
                     let written = null;
                     if (read == null) {
@@ -95,6 +119,8 @@ class ReadIncWriteTest {
                         this.stat.fails++;
                         throw new Error();
                     }
+                    this.stat.cycles.enqueue({ ts: time_us() });
+                    this.stat.done+=1;
                     break;
                 }
             } catch (e) { }
